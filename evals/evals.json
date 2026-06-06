@@ -1,0 +1,29 @@
+{
+  "skill_name": "comet-report",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "生成comet报告",
+      "expected_output": "触发 comet-report；读取 .comet-report.yaml，在 docs/comet-reports/<change>-<timestamp>/ 生成 report.md、report.html、manifest.json；回复包含任务完成进度与实际输出路径。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "/comet-report optimize-spu-sku-rental-query",
+      "expected_output": "为指定 change 生成 v2 结构化报告；§5 Tasks 为五列表格；输出路径遵循配置或用户 -o。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "帮我导出一份 Comet 全流程文档到 ./tmp/my-report，要有分析和任务列表",
+      "expected_output": "触发 comet-report 并传 -o ./tmp/my-report；输出含 §1-§8 结构化章节。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "comet-report my-change，输出目录用环境变量 COMET_REPORT_DIR=/team/reports",
+      "expected_output": "使用 COMET_REPORT_DIR 作为根目录，生成 /team/reports/my-change-<timestamp>/。",
+      "files": []
+    }
+  ]
+}
