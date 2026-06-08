@@ -370,6 +370,57 @@ def find_section_by_keyword(sections: dict[str, str], keywords: tuple[str, ...])
     return ""
 
 
+def render_test_strategy_html(subsections: dict[str, str]) -> str:
+    """Render design.md 测试策略 subsections as HTML blocks."""
+    if not subsections:
+        return ""
+    parts: list[str] = []
+    for title, body in subsections.items():
+        parts.append(f"<h4>{esc(title)}</h4>")
+        rows = parse_md_table(body)
+        if rows and len(rows) > 1:
+            parts.append(table_html(rows[0], rows[1:]))
+        code = extract_codeblock(body)
+        if code:
+            parts.append(f"<pre>{esc(code)}</pre>")
+        bullets = parse_bullets(body)
+        if bullets and not rows:
+            parts.append("<ul>" + "".join(f"<li>{esc(b)}</li>" for b in bullets) + "</ul>")
+        elif body.strip() and not rows and not code:
+            plain = body.strip()
+            if plain.startswith("```"):
+                plain = extract_codeblock(body) or plain
+            if plain:
+                parts.append(f"<pre>{esc(plain)}</pre>")
+    return "".join(parts)
+
+
+def render_test_strategy_markdown(subsections: dict[str, str]) -> list[str]:
+    """Render design.md 测试策略 subsections as markdown lines."""
+    if not subsections:
+        return []
+    lines: list[str] = []
+    for title, body in subsections.items():
+        lines.extend([f"#### {title}", ""])
+        rows = parse_md_table(body)
+        if rows:
+            lines.append("| " + " | ".join(rows[0]) + " |")
+            lines.append("| " + " | ".join("---" for _ in rows[0]) + " |")
+            for row in rows[1:]:
+                lines.append("| " + " | ".join(row) + " |")
+            lines.append("")
+        code = extract_codeblock(body)
+        if code:
+            lines.extend(["```sql" if "SELECT" in code else "```", code, "```", ""])
+        bullets = parse_bullets(body)
+        if bullets and not rows:
+            lines.extend(f"- {b}" for b in bullets)
+            lines.append("")
+        elif body.strip() and not rows and not code:
+            lines.extend([body.strip(), ""])
+    return lines
+
+
 def parse_tasks(tasks_path: Path) -> list[TaskItem]:
     if not tasks_path.is_file():
         return []
@@ -665,6 +716,9 @@ def build_structured_data(ctx: ReportContext) -> dict:
     os_done, os_total = openspec_artifact_count(ctx.openspec_status)
     hash_short = ctx.handoff_hash[:8] + "…" if len(ctx.handoff_hash) > 8 else ctx.handoff_hash
 
+    test_strategy = design_sec.get("测试策略", "")
+    test_strategy_sub = split_md_subsections(test_strategy)
+
     return {
         "proposal": proposal,
         "design": design,
@@ -685,6 +739,7 @@ def build_structured_data(ctx: ReportContext) -> dict:
         "os_done": os_done,
         "os_total": os_total,
         "hash_short": hash_short,
+        "test_strategy_sub": test_strategy_sub,
     }
 
 
@@ -810,6 +865,14 @@ def build_html(ctx: ReportContext, data: dict) -> str:
         '<section id="s6"><h2>§6 Verify</h2>',
         f"<p>verify_mode: {esc(verify_mode)} &nbsp;|&nbsp; verify_result: {verify_tag} &nbsp;|&nbsp; report: {report_tag}</p>",
     ]
+    if data.get("test_strategy_sub"):
+        s6_parts.append("<h3>测试策略</h3>")
+        s6_parts.append(
+            '<p class="muted">来源：openspec/changes/'
+            + esc(ctx.change)
+            + '/design.md §测试策略</p>'
+        )
+        s6_parts.append(render_test_strategy_html(data["test_strategy_sub"]))
     if data["specs"]:
         spec_rows = []
         spec_raw = []
@@ -821,6 +884,7 @@ def build_html(ctx: ReportContext, data: dict) -> str:
                 short_name = req.name
             spec_rows.append([short_name, scenarios, "未验证"])
             spec_raw.append([f"<td>{esc(short_name)}</td>", f"<td>{esc(scenarios)}</td>", f"<td>{status}</td>"])
+        s6_parts.append("<h3>Spec Requirements</h3>")
         s6_parts.append(table_html(["Spec Requirement", "Scenarios", "状态"], spec_rows, spec_raw))
     s6_parts.append("</section>")
 
@@ -1032,7 +1096,15 @@ def build_markdown(ctx: ReportContext, data: dict) -> str:
     lines.extend(["---", "", "## §6 Verify", ""])
     lines.append(f"verify_result: **{ctx.verify_result}**")
     lines.append("")
+    if data.get("test_strategy_sub"):
+        lines.append("### 测试策略")
+        lines.append("")
+        lines.append(f"_来源：`openspec/changes/{ctx.change}/design.md` §测试策略_")
+        lines.append("")
+        lines.extend(render_test_strategy_markdown(data["test_strategy_sub"]))
     if data["specs"]:
+        lines.append("### Spec Requirements")
+        lines.append("")
         lines.extend(["| Spec Requirement | Scenarios | 状态 |", "|---|---|---|"])
         for req in data["specs"]:
             scenarios = " / ".join(req.scenarios[:2])
